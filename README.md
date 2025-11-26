@@ -1,88 +1,186 @@
-# 🏗 Scaffold-ETH 2
+# 🎓 Attendance Tracker — система учёта посещаемости
 
-<h4 align="center">
-  <a href="https://docs.scaffoldeth.io">Documentation</a> |
-  <a href="https://scaffoldeth.io">Website</a>
-</h4>
+Проект выполнен на основе фреймворка **Scaffold-ETH 2** и демонстрирует работу смарт-контракта, взаимодействие с блокчейном и веб-интерфейсом через MetaMask.
 
-🧪 An open-source, up-to-date toolkit for building decentralized applications (dapps) on the Ethereum blockchain. It's designed to make it easier for developers to create and deploy smart contracts and build user interfaces that interact with those contracts.
+Приложение позволяет студенту отмечать своё присутствие по конкретной дисциплине, а также проверять посещаемость других пользователей по адресу.
 
-⚙️ Built using NextJS, RainbowKit, Foundry/Hardhat, Wagmi, Viem, and Typescript.
+Поддерживаемые дисциплины:
 
-- ✅ **Contract Hot Reload**: Your frontend auto-adapts to your smart contract as you edit it.
-- 🪝 **[Custom hooks](https://docs.scaffoldeth.io/hooks/)**: Collection of React hooks wrapper around [wagmi](https://wagmi.sh/) to simplify interactions with smart contracts with typescript autocompletion.
-- 🧱 [**Components**](https://docs.scaffoldeth.io/components/): Collection of common web3 components to quickly build your frontend.
-- 🔥 **Burner Wallet & Local Faucet**: Quickly test your application with a burner wallet and local faucet.
-- 🔐 **Integration with Wallet Providers**: Connect to different wallet providers and interact with the Ethereum network.
+* **Программирование**
+* **Английский**
+* **Математика**
 
-![Debug Contracts tab](https://github.com/scaffold-eth/scaffold-eth-2/assets/55535804/b237af0c-5027-4849-a5c1-2e31495cccb1)
+---
 
-## Requirements
+## 🧱 Технологии
 
-Before you begin, you need to install the following tools:
+Проект использует следующие инструменты:
 
-- [Node (>= v20.18.3)](https://nodejs.org/en/download/)
-- Yarn ([v1](https://classic.yarnpkg.com/en/docs/install/) or [v2+](https://yarnpkg.com/getting-started/install))
-- [Git](https://git-scm.com/downloads)
+* **Solidity** — смарт-контракт `Attendance.sol`
+* **Hardhat** — локальная блокчейн-сеть и тесты
+* **Scaffold-ETH 2** — фронтенд + инфраструктура
+* **Next.js + TypeScript**
+* **RainbowKit + Wagmi + Viem** — работа с MetaMask
+* **TailwindCSS + DaisyUI** — оформление интерфейса
 
-## Quickstart
+---
 
-To get started with Scaffold-ETH 2, follow the steps below:
+# 🚀 Установка и запуск проекта
 
-1. Install the latest version of Scaffold-ETH 2
+## 1. Установите зависимости
 
-```
-npx create-eth@latest
+```bash
+yarn install
 ```
 
-This command will install all the necessary packages and dependencies, so it might take a while.
+---
 
-> [!NOTE]
-> You can also initialize your project with one of our extensions to add specific features or starter-kits. Learn more in our [extensions documentation](https://docs.scaffoldeth.io/extensions/).
+# 🔗 Настройка MetaMask
 
-2. Run a local network in the first terminal:
+Для работы проекта нужно использовать **локальную Hardhat-сеть**.
 
-```
+### 1. Добавьте сеть Hardhat в MetaMask вручную:
+
+Параметры:
+
+| Поле                | Значение                                       |
+| ------------------- | ---------------------------------------------- |
+| **Network Name**    | Hardhat Localhost                              |
+| **RPC URL**         | [http://127.0.0.1:8545](http://127.0.0.1:8545) |
+| **Chain ID**        | 31337                                          |
+| **Currency Symbol** | ETH                                            |
+
+---
+
+### 2. Импортируйте аккаунт Hardhat в MetaMask
+
+В Hardhat сети автоматически создаётся 20 локальных аккаунтов.
+Посмотреть их можно после запуска команды:
+
+```bash
 yarn chain
 ```
 
-This command starts a local Ethereum network that runs on your local machine and can be used for testing and development. Learn how to [customize your network configuration](https://docs.scaffoldeth.io/quick-start/environment#1-initialize-a-local-blockchain).
+Терминал покажет список аккаунтов и **их приватных ключей**.
+Скопируйте один из приватных ключей и импортируйте в MetaMask:
 
-3. On a second terminal, deploy the test contract:
+MetaMask → Account → Import Account → Private Key
 
+Это позволит:
+
+* подписывать транзакции,
+* проверять посещаемость,
+* отмечать себя присутствующим.
+
+---
+
+# ▶️ Запуск локальной сети и приложения
+
+Открываем **три терминала**:
+
+### **Терминал 1 — локальная сеть Hardhat**
+
+```bash
+yarn chain
 ```
+
+### **Терминал 2 — деплой смарт-контракта**
+
+```bash
 yarn deploy
 ```
 
-This command deploys a test smart contract to the local network. You can find more information about how to customize your contract and deployment script in our [documentation](https://docs.scaffoldeth.io/quick-start/environment#2-deploy-your-smart-contract).
+### **Терминал 3 — запуск фронтенда**
 
-4. On a third terminal, start your NextJS app:
-
-```
+```bash
 yarn start
 ```
 
-Visit your app on: `http://localhost:3000`. You can interact with your smart contract using the `Debug Contracts` page. You can tweak the app config in `packages/nextjs/scaffold.config.ts`.
+После запуска интерфейс будет доступен по ссылке:
 
-**What's next**:
+👉 [http://localhost:3000](http://localhost:3000)
 
-Visit the [What's next section of our docs](https://docs.scaffoldeth.io/quick-start/environment#whats-next) to learn how to:
+---
 
-- Edit your smart contracts
-- Edit your deployment scripts
-- Customize your frontend
-- Edit the app config
-- Writing and running tests
-- [Setting up external services and API keys](https://docs.scaffoldeth.io/deploying/deploy-smart-contracts#configuration-of-third-party-services-for-production-grade-apps)
+# 📌 Функционал приложения
 
-## Documentation
+### 👤 1. Авторизация через MetaMask
 
-Visit our [docs](https://docs.scaffoldeth.io) to learn all the technical details and guides of Scaffold-ETH 2.
+При открытии страницы нужно подключить кошелёк к локальной Hardhat-сети.
 
-To know more about its features, check out our [website](https://scaffoldeth.io).
+---
 
-## Contributing to Scaffold-ETH 2
+### 📘 2. Выбор дисциплины
 
-We welcome contributions to Scaffold-ETH 2!
+В интерфейсе есть табы списка дисциплин:
 
-Please see [CONTRIBUTING.MD](https://github.com/scaffold-eth/scaffold-eth-2/blob/main/CONTRIBUTING.md) for more information and guidelines for contributing to Scaffold-ETH 2.
+* Программирование
+* Английский
+* Математика
+
+---
+
+### 🟢 3. Отметка посещения (`checkIn(subject)`)
+
+Студент может отметить своё присутствие по выбранной дисциплине.
+
+Смарт-контракт гарантирует:
+
+* нельзя отметиться дважды — будет `revert`
+* событие `CheckedIn` будет записано в журнал
+
+---
+
+### 🔍 4. Проверка посещаемости любого пользователя
+
+Можно ввести **адрес** (0x...) и посмотреть, посещал ли он занятие по выбранной дисциплине.
+
+---
+
+### 📝 5. Журнал посещаемости (Events)
+
+Внизу страницы показывается история всех событий `CheckedIn`, включая:
+
+* адрес студента
+* дисциплину
+* хеш транзакции
+* дату и время
+
+Обновляется автоматически через `useScaffoldWatchContractEvent`.
+
+---
+
+# 🧪 Тесты
+
+Смарт-контракт покрыт тестами (Viem + Hardhat):
+
+* ✔ тест на запись (`checkIn`)
+* ✔ тест на событие (`CheckedIn`)
+* ✔ тест на ошибку (`require` при повторной отметке)
+* ✔ тест на корректность `isPresent` по дисциплинам
+
+Запуск тестов:
+
+```bash
+yarn test
+```
+
+---
+
+# 📂 Структура проекта
+
+```
+packages/
+  hardhat/
+    contracts/Attendance.sol
+    test/Attendance.t.ts
+    deploy/00_deploy_attendance.ts
+
+  nextjs/
+    app/
+      page.tsx        # интерфейс Attendance Tracker
+    components/
+    hooks/
+```
+
+---
