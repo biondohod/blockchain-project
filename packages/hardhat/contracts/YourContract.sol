@@ -15,7 +15,7 @@ import "hardhat/console.sol";
 contract YourContract {
     // State Variables
     address public immutable owner;
-    string public greeting = "Hello Kornev Andrey";
+    string public greeting = "Building Unstoppable Apps!!!";
     bool public premium = false;
     uint256 public totalCounter = 0;
     mapping(address => uint) public userGreetingCounter;

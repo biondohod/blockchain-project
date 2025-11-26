@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Address } from "@scaffold-ui/components";
+import { Address, AddressInput } from "@scaffold-ui/components";
 import type { NextPage } from "next";
 import { hardhat } from "viem/chains";
-import { useAccount } from "wagmi";
-import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { useAccount, usePublicClient } from "wagmi";
 import {
   useScaffoldReadContract,
   useScaffoldWatchContractEvent,
@@ -16,212 +15,230 @@ import {
 
 const isAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
 
+type SubjectValue = 0 | 1 | 2;
+
+const SUBJECTS: Array<{ value: SubjectValue; label: string }> = [
+  { value: 0, label: "Программирование" },
+  { value: 1, label: "Английский" },
+  { value: 2, label: "Математика" },
+];
+
+const SUBJECT_LABEL: Record<SubjectValue, string> = {
+  0: "Программирование",
+  1: "Английский",
+  2: "Математика",
+};
+
 type EventEntry = {
   id: string;
-  teacher: string;
   student: string;
-  grade: string;
-  time: string;
+  timestamp: string;
+  subject: SubjectValue;
 };
 
 const Home: NextPage = () => {
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
+  const [selectedSubject, setSelectedSubject] = useState<SubjectValue>(0);
 
-  // --- READ: моя оценка ---
-  const { data: myGrade, refetch: refetchMy } = useScaffoldReadContract({
-    contractName: "GradesManager",
-    functionName: "getMyGrade",
+  const myStatusArgs = useMemo(() => [selectedSubject, connectedAddress] as const, [selectedSubject, connectedAddress]);
+
+  const { data: myStatus, refetch: refetchMyStatus } = useScaffoldReadContract({
+    contractName: "Attendance",
+    functionName: "isPresent",
+    args: myStatusArgs,
     watch: true,
-    account: connectedAddress,
   });
 
-  // --- READ: оценка студента ---
   const [lookupAddr, setLookupAddr] = useState("");
-  const lookupArgs = useMemo(() => (isAddress(lookupAddr) ? [lookupAddr as `0x${string}`] : undefined), [lookupAddr]);
+  const lookupArgs = useMemo(
+    () => [selectedSubject, isAddress(lookupAddr) ? (lookupAddr as `0x${string}`) : undefined] as const,
+    [lookupAddr, selectedSubject],
+  );
 
-  const { data: lookedUpGrade, refetch: refetchLookup } = useScaffoldReadContract({
-    contractName: "GradesManager",
-    functionName: "getGrade",
+  const { data: lookupStatus } = useScaffoldReadContract({
+    contractName: "Attendance",
+    functionName: "isPresent",
     args: lookupArgs,
-    enabled: !!lookupArgs,
     watch: true,
   });
 
-  // --- WRITE: setGrade ---
-  const [studentAddr, setStudentAddr] = useState("");
-  const [gradeVal, setGradeVal] = useState("");
+  useEffect(() => {
+    if (connectedAddress && !lookupAddr) {
+      setLookupAddr(connectedAddress);
+    }
+  }, [connectedAddress, lookupAddr]);
+
+  const { writeContractAsync, isPending } = useScaffoldWriteContract("Attendance");
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  const { writeContractAsync, isPending } = useScaffoldWriteContract("GradesManager");
-
-  const canSubmit = useMemo(() => {
-    const n = Number(gradeVal);
-    return isAddress(studentAddr) && Number.isFinite(n) && n >= 0 && n <= 100 && !isPending;
-  }, [studentAddr, gradeVal, isPending]);
-
-  async function setGrade() {
+  const handleCheckIn = async () => {
     try {
       setErrMsg(null);
-
-      if (!isAddress(studentAddr)) throw new Error("Введите корректный адрес студента (0x...)");
-
-      const n = Number(gradeVal);
-      if (n < 0 || n > 100 || !Number.isFinite(n)) throw new Error("Оценка должна быть в диапазоне 0..100");
-
       await writeContractAsync({
-        functionName: "setGrade",
-        args: [studentAddr as `0x${string}`, BigInt(n)],
+        functionName: "checkIn",
+        args: [selectedSubject],
       });
-
-      setGradeVal("");
-
-      refetchMy?.();
-      refetchLookup?.();
+      await refetchMyStatus?.();
     } catch (e: any) {
       setErrMsg(e?.shortMessage || e?.message || "Transaction failed");
     }
-  }
+  };
 
-  // Автовставка адреса в просмотр оценки
-  useEffect(() => {
-    if (connectedAddress && !lookupAddr) setLookupAddr(connectedAddress);
-  }, [connectedAddress, lookupAddr]);
+  const canCheckIn = Boolean(connectedAddress) && !isPending && myStatus !== true;
 
-  // --- EVENTS: журнал ---
   const [events, setEvents] = useState<EventEntry[]>([]);
 
   useScaffoldWatchContractEvent({
-    contractName: "GradesManager",
-    eventName: "GradeSet",
+    contractName: "Attendance",
+    eventName: "CheckedIn",
     onLogs: logs => {
-      setEvents(prev => {
-        const newEvents = logs.map(log => ({
-          id: `${log.transactionHash}-${log.logIndex}`,
-          teacher: log.args.teacher?.toString() || "",
-          student: log.args.student?.toString() || "",
-          grade: log.args.grade?.toString() || "",
-          time: new Date().toLocaleTimeString(),
-        }));
-
-        const existingIds = new Set(prev.map(ev => ev.id));
-        const uniqueNewEvents = newEvents.filter(ev => !existingIds.has(ev.id));
-
-        return [...uniqueNewEvents, ...prev];
-      });
+      if (!publicClient) return;
+      void (async () => {
+        const hydrated = await Promise.all(
+          logs.map(async log => {
+            const block = log.blockHash ? await publicClient.getBlock({ blockHash: log.blockHash }) : undefined;
+            const timestamp =
+              block?.timestamp !== undefined
+                ? new Date(Number(block.timestamp) * 1000).toLocaleString()
+                : new Date().toLocaleString();
+            return {
+              id: `${log.transactionHash}-${log.logIndex}`,
+              student: (log.args?.student as string) ?? "",
+              subject: Number(log.args?.subject ?? 0) as SubjectValue,
+              timestamp,
+            };
+          }),
+        );
+        setEvents(prev => {
+          const known = new Set(prev.map(ev => ev.id));
+          const unique = hydrated.filter(ev => !known.has(ev.id));
+          return [...unique, ...prev];
+        });
+      })();
     },
   });
 
+  const myStatusLabel = myStatus === undefined ? "..." : myStatus ? "Пришёл" : "Не отмечен";
+  const lookupLabel = lookupStatus === undefined ? "--" : lookupStatus ? "Пришёл" : "Не отмечен";
+
   return (
-    <div className="flex items-center flex-col grow pt-10">
-      <div className="px-5 w-full max-w-4xl">
-        <h1 className="text-center">
-          <span className="block text-2xl mb-2">Grades Manager</span>
-          <span className="block text-4xl font-bold">Чтение и запись оценок</span>
-        </h1>
+    <div data-theme="emerald" className="flex items-center flex-col grow bg-base-200 py-12">
+      <div className="w-full max-w-5xl px-6 space-y-8">
+        <header className="text-center space-y-2">
+          <p className="text-2xl uppercase tracking-[0.3em] text-primary">Attendance Tracker</p>
+          <h1 className="text-4xl md:text-5xl font-black text-base-content">Учёт посещаемости</h1>
+          <p className="text-base-content/80">Выбирайте предмет и отмечайте посещение в один клик.</p>
+        </header>
 
-        {/* Connected */}
-        <div className="flex justify-center items-center flex-col mt-6">
-          <p className="my-2 font-medium">Подключённый адрес:</p>
-          <Address
-            address={connectedAddress}
-            chain={targetNetwork}
-            blockExplorerAddressLink={
-              targetNetwork.id === hardhat.id ? `/blockexplorer/address/${connectedAddress}` : undefined
-            }
-          />
-        </div>
+        <section className="grid gap-4 md:grid-cols-3 bg-base-100 rounded-3xl p-6 shadow-xl border border-base-300">
+          <div className="md:col-span-2 space-y-3">
+            <p className="text-sm uppercase text-base-content/60">Выберите предмет</p>
+            <div className="flex flex-wrap gap-3">
+              {SUBJECTS.map(option => (
+                <button
+                  key={option.value}
+                  className={`btn btn-sm md:btn-md rounded-full ${
+                    selectedSubject === option.value ? "btn-primary" : "btn-outline"
+                  }`}
+                  onClick={() => setSelectedSubject(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-2">
+            <p className="text-sm uppercase text-base-content/60">Подключённый адрес</p>
+            <Address
+              address={connectedAddress}
+              chain={targetNetwork}
+              blockExplorerAddressLink={
+                targetNetwork.id === hardhat.id ? `/blockexplorer/address/${connectedAddress}` : undefined
+              }
+            />
+          </div>
+        </section>
 
-        {/* READ */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-base-100 rounded-3xl p-6 shadow">
-            <h2 className="text-xl font-semibold mb-3">Моя оценка</h2>
-            <p className="text-lg">{myGrade !== undefined ? <b>{myGrade.toString()}</b> : "--"}</p>
+        <section className="grid gap-6 md:grid-cols-[2fr,1fr]">
+          <div className="bg-base-100 rounded-3xl p-6 shadow-xl border border-base-300 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase text-base-content/60">Мой статус</p>
+                <p className="text-2xl font-semibold">{myStatusLabel}</p>
+                <p className="text-base-content/70">{SUBJECT_LABEL[selectedSubject]}</p>
+              </div>
+              <button className="btn btn-lg btn-primary" onClick={handleCheckIn} disabled={!canCheckIn}>
+                {isPending ? "Подтвердите..." : "Отметиться"}
+              </button>
+            </div>
+            {errMsg && <p className="text-error">{errMsg}</p>}
+            <div className="divider" />
+            <div className="space-y-4">
+              <p className="text-sm uppercase text-base-content/60">Проверить адрес</p>
+              <AddressInput placeholder="0xabc..." value={lookupAddr} onChange={value => setLookupAddr(value ?? "")} />
+              <div className="text-lg">
+                Статус: <b>{lookupLabel}</b>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-base-100 rounded-3xl p-6 shadow-xl border border-base-300">
+          <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+            <div>
+              <p className="text-sm uppercase text-base-content/60">История посещений</p>
+              <h2 className="text-2xl font-semibold">Все события</h2>
+            </div>
           </div>
 
-          <div className="bg-base-100 rounded-3xl p-6 shadow">
-            <h2 className="text-xl font-semibold mb-3">Проверить оценку студента</h2>
-            <input
-              className="input input-bordered w-full"
-              placeholder="0xabc..."
-              value={lookupAddr}
-              onChange={e => setLookupAddr(e.target.value)}
-            />
-            <p className="mt-3">
-              Оценка: <b>{lookedUpGrade !== undefined ? lookedUpGrade.toString() : "--"}</b>
+          {events.length === 0 && <p className="opacity-70">Событий пока нет</p>}
+
+          <div className="space-y-4">
+            {events.map(ev => (
+              <div key={ev.id} className="p-4 rounded-2xl bg-base-200 flex flex-col gap-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="badge badge-secondary">{SUBJECT_LABEL[ev.subject]}</span>
+                  <span className="text-sm opacity-70">{ev.timestamp}</span>
+                </div>
+                <Address
+                  address={ev.student}
+                  chain={targetNetwork}
+                  blockExplorerAddressLink={
+                    targetNetwork.id === hardhat.id ? `/blockexplorer/address/${ev.student}` : undefined
+                  }
+                  format="short"
+                />
+                <span className="text-xs opacity-60">ID: {ev.id}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="bg-base-100 rounded-3xl p-6 shadow-xl border border-base-300 space-y-4">
+          <p className="text-sm uppercase text-base-content/60">Подсказки</p>
+          <div className="rounded-2xl bg-base-200 p-4 space-y-2">
+            <p className="font-semibold">Отладка</p>
+            <p className="text-sm opacity-80">
+              Изучайте контракт через{" "}
+              <Link href="/debug" className="link">
+                Debug Contracts
+              </Link>
+              .
             </p>
           </div>
-        </div>
-
-        {/* WRITE */}
-        <div className="bg-base-100 rounded-3xl p-6 shadow mt-8">
-          <h2 className="text-xl font-semibold mb-3">Выставить/обновить оценку</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              className="input input-bordered w-full"
-              placeholder="Адрес студента 0x..."
-              value={studentAddr}
-              onChange={e => setStudentAddr(e.target.value)}
-            />
-
-            <input
-              className="input input-bordered w-full"
-              placeholder="Напр.: 95"
-              value={gradeVal}
-              onChange={e => setGradeVal(e.target.value)}
-            />
+          <div className="rounded-2xl bg-base-200 p-4 space-y-2">
+            <p className="font-semibold">Блоки</p>
+            <p className="text-sm opacity-80">
+              Анализируйте транзакции во{" "}
+              <Link href="/blockexplorer" className="link">
+                Block Explorer
+              </Link>
+              .
+            </p>
           </div>
-
-          {errMsg && <p className="text-error mt-2">{errMsg}</p>}
-
-          <button className="btn btn-primary mt-4" onClick={setGrade} disabled={!canSubmit}>
-            {isPending ? "Подтвердите в MetaMask..." : "Сохранить оценку"}
-          </button>
-        </div>
-
-        {/* EVENTS */}
-        <div className="bg-base-100 rounded-3xl p-6 shadow mt-10">
-          <h2 className="text-xl font-semibold mb-3">История выставления оценок</h2>
-
-          {events.length === 0 && <p className="opacity-70">Пока нет событий</p>}
-
-          {events.map(ev => (
-            <div key={ev.id} className="border-b border-base-300 py-2 text-sm">
-              <p>
-                <b>{ev.teacher}</b> поставил <b>{ev.grade}</b> студенту <b>{ev.student}</b>
-              </p>
-              <p className="opacity-60">{ev.time}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Helpers */}
-        <div className="grow bg-base-300 w-full mt-16 px-8 py-12 rounded-3xl">
-          <div className="flex justify-center items-center gap-12 flex-col md:flex-row">
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center rounded-3xl">
-              <BugAntIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Tinker with your smart contract using the{" "}
-                <Link href="/debug" className="link">
-                  Debug Contracts
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center rounded-3xl">
-              <MagnifyingGlassIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Explore your local transactions with the{" "}
-                <Link href="/blockexplorer" className="link">
-                  Block Explorer
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   );

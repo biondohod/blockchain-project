@@ -6,7 +6,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
 const deployedContracts = {
   31337: {
-    GradesManager: {
+    Attendance: {
       address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
       abi: [
         {
@@ -20,52 +20,38 @@ const deployedContracts = {
             {
               indexed: true,
               internalType: "address",
-              name: "by",
-              type: "address",
-            },
-            {
-              indexed: true,
-              internalType: "address",
               name: "student",
               type: "address",
             },
             {
-              indexed: false,
-              internalType: "uint8",
-              name: "grade",
+              indexed: true,
+              internalType: "enum Attendance.Subject",
+              name: "subject",
               type: "uint8",
             },
           ],
-          name: "GradeSet",
+          name: "CheckedIn",
           type: "event",
         },
         {
           inputs: [
             {
+              internalType: "enum Attendance.Subject",
+              name: "",
+              type: "uint8",
+            },
+            {
               internalType: "address",
-              name: "student",
+              name: "",
               type: "address",
             },
           ],
-          name: "getGrade",
+          name: "attended",
           outputs: [
             {
-              internalType: "uint8",
+              internalType: "bool",
               name: "",
-              type: "uint8",
-            },
-          ],
-          stateMutability: "view",
-          type: "function",
-        },
-        {
-          inputs: [],
-          name: "getMyGrade",
-          outputs: [
-            {
-              internalType: "uint8",
-              name: "",
-              type: "uint8",
+              type: "bool",
             },
           ],
           stateMutability: "view",
@@ -74,19 +60,38 @@ const deployedContracts = {
         {
           inputs: [
             {
+              internalType: "enum Attendance.Subject",
+              name: "subject",
+              type: "uint8",
+            },
+          ],
+          name: "checkIn",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "enum Attendance.Subject",
+              name: "subject",
+              type: "uint8",
+            },
+            {
               internalType: "address",
               name: "student",
               type: "address",
             },
+          ],
+          name: "isPresent",
+          outputs: [
             {
-              internalType: "uint8",
-              name: "grade",
-              type: "uint8",
+              internalType: "bool",
+              name: "",
+              type: "bool",
             },
           ],
-          name: "setGrade",
-          outputs: [],
-          stateMutability: "nonpayable",
+          stateMutability: "view",
           type: "function",
         },
         {
